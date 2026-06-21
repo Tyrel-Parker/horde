@@ -103,10 +103,12 @@ function distScore(monY) {
   return Math.max(1, Math.floor((dist / maxDist) * 10));
 }
 
-function monsterHp(lvl) { return 2 + lvl * 2; }
-function monsterSpeed(lvl) { return 0.4 + lvl * 0.06; }
-function spawnInterval(lvl) { return Math.max(250, 1400 - lvl * 80); }
-function bossHp(lvl) { return 30 + lvl * 35; }
+function monsterHp(lvl) { return 1 + Math.floor(lvl * 0.5); }
+function monsterSpeed(lvl) { return 0.35 + lvl * 0.04; }
+function rowSpawnInterval(lvl) { return Math.max(300, 900 - lvl * 40); }
+function monstersPerRow(lvl) { return Math.min(14, 10 + Math.floor(lvl / 3)); }
+function rowFillRate(lvl) { return Math.min(0.95, 0.7 + lvl * 0.02); }
+function bossHp(lvl) { return 40 + lvl * 40; }
 function bossSpeed(lvl) { return 0.2 + lvl * 0.02; }
 function bossInterval(lvl) { return Math.max(8000, 25000 - lvl * 1200); }
 
@@ -245,18 +247,29 @@ function initRun() {
 }
 
 // === SPAWNING ===
-function spawnMonster() {
-  const laneCenter = LANE_L + (LANE_R - LANE_L) / 2;
-  const laneW = LANE_R - LANE_L - 20;
-  monsters.push({
-    x: laneCenter + (Math.random() - 0.5) * laneW,
-    y: -10,
-    hp: monsterHp(level),
-    maxHp: monsterHp(level),
-    speed: monsterSpeed(level) * (0.8 + Math.random() * 0.4),
-    boss: false,
-    w: 14, h: 14
-  });
+function spawnMonsterRow() {
+  const laneStart = LANE_L + 8;
+  const laneEnd = LANE_R - 8;
+  const laneW = laneEnd - laneStart;
+  const count = monstersPerRow(level);
+  const spacing = laneW / count;
+  const speed = monsterSpeed(level) * (0.9 + Math.random() * 0.2);
+  const fill = rowFillRate(level);
+  const hp = monsterHp(level);
+
+  for (let i = 0; i < count; i++) {
+    if (Math.random() > fill) continue;
+    monsters.push({
+      x: laneStart + spacing * (i + 0.5) + (Math.random() - 0.5) * 3,
+      y: -10 + (Math.random() - 0.5) * 4,
+      hp,
+      maxHp: hp,
+      speed,
+      boss: false,
+      hitGate: false,
+      w: 14, h: 14
+    });
+  }
 }
 
 function spawnBoss() {
@@ -268,6 +281,7 @@ function spawnBoss() {
     maxHp: bossHp(level),
     speed: bossSpeed(level),
     boss: true,
+    hitGate: false,
     w: 36, h: 36
   });
 }
@@ -339,16 +353,17 @@ function update(dt) {
 
   player.x = clamp(player.x + moveDir * PLAYER_SPEED, 10, W - 10);
 
-  // Auto-fire
+  // Auto-fire from each shooter's position
   const fireInterval = (rapidFireEnd > elapsed) ? BASE_FIRE_INTERVAL / 2 : BASE_FIRE_INTERVAL;
   fireTimer -= dt;
   if (fireTimer <= 0) {
     fireTimer = fireInterval;
     const lane = getLane(player.x);
-    for (let i = 0; i < player.shooters; i++) {
+    const positions = getShooterPositions(player.x, PLAYER_Y, player.shooters);
+    for (const sp of positions) {
       bullets.push({
-        x: player.x + (Math.random() - 0.5) * Math.min(player.shooters * 2, 16),
-        y: PLAYER_Y - 20,
+        x: sp.x + (Math.random() - 0.5) * 2,
+        y: sp.y - 18,
         lane
       });
     }
@@ -360,11 +375,11 @@ function update(dt) {
     if (bullets[i].y < -10) bullets.splice(i, 1);
   }
 
-  // Spawn monsters
+  // Spawn monster rows
   monsterSpawnTimer -= dt;
   if (monsterSpawnTimer <= 0) {
-    monsterSpawnTimer = spawnInterval(level);
-    spawnMonster();
+    monsterSpawnTimer = rowSpawnInterval(level);
+    spawnMonsterRow();
   }
 
   // Spawn boss
@@ -400,11 +415,13 @@ function update(dt) {
   // Update monsters
   for (let i = monsters.length - 1; i >= 0; i--) {
     const m = monsters[i];
+    const prevY = m.y;
     m.y += m.speed;
 
-    // Gate collision
-    if (gate && gate.hp > 0 && m.y + m.h / 2 > gate.y && m.y - m.h / 2 < gate.y + 8) {
-      gate.hp -= m.boss ? 5 : 1;
+    // Gate collision — trigger once when monster crosses gate line
+    if (gate && gate.hp > 0 && !m.hitGate && prevY < gate.y && m.y >= gate.y) {
+      m.hitGate = true;
+      gate.hp -= m.boss ? 10 : 1;
       if (gate.hp <= 0) {
         gate.hp = 0;
         gate.active = false;
@@ -412,22 +429,27 @@ function update(dt) {
       }
     }
 
-    // Gate activation check
-    if (gate && gate.hp > 0) {
-      const anyBelow = monsters.some(mon => mon.y > gate.y);
-      gate.active = !anyBelow;
-    }
-
-    // Monster reaches player line
-    if (m.y >= PLAYER_Y + 10) {
+    // Monster reaches player line — trigger once when crossing
+    if (prevY < PLAYER_Y + 10 && m.y >= PLAYER_Y + 10) {
       if (shieldEnd <= elapsed) {
-        const dmg = m.boss ? 40 : 15;
+        const dmg = m.boss ? 40 : 10;
         takeDamage(dmg);
       }
-      spawnParticles(m.x, PLAYER_Y, '#ff4444', 5);
+      spawnParticles(m.x, PLAYER_Y, '#ff4444', 3);
       monsters.splice(i, 1);
       continue;
     }
+
+    // Remove if off screen
+    if (m.y > H + 20) {
+      monsters.splice(i, 1);
+      continue;
+    }
+  }
+
+  // Gate activation check — active only when no monsters below it
+  if (gate && gate.hp > 0) {
+    gate.active = !monsters.some(mon => mon.y > gate.y);
   }
 
   // Update powerups
@@ -551,6 +573,7 @@ function pushHordeBack(amount) {
   for (const m of monsters) {
     m.y -= amount;
     if (m.y < -m.h) m.y = -m.h;
+    if (gate && m.y < gate.y) m.hitGate = false;
   }
 }
 
@@ -719,10 +742,20 @@ function renderGame() {
 
 function getShooterPositions(x, y, count) {
   const pos = [{ x, y }];
-  for (let i = 1; i < count; i++) {
-    const row = Math.ceil(i / 2);
-    const side = i % 2 === 1 ? -1 : 1;
-    pos.push({ x: x + side * row * 12, y: y + row * 14 });
+  if (count <= 1) return pos;
+  const ROW_H = 7;
+  const COL_W = 9;
+  let placed = 1;
+  let row = 1;
+  while (placed < count) {
+    const cols = row + 1;
+    const rowY = y + row * ROW_H;
+    const startX = x - (cols - 1) * COL_W / 2;
+    for (let c = 0; c < cols && placed < count; c++) {
+      pos.push({ x: startX + c * COL_W, y: rowY });
+      placed++;
+    }
+    row++;
   }
   return pos;
 }
