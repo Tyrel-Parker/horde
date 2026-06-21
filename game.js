@@ -63,7 +63,7 @@ let monsters = [];
 let targets = [];
 let particles = [];
 let powerups = [];
-let gate = null;
+let gates = [];
 
 // Spawn timers
 let monsterSpawnTimer = 0;
@@ -104,10 +104,10 @@ function distScore(monY) {
 }
 
 function monsterHp(lvl) { return 1 + Math.floor(lvl * 0.5); }
-function monsterSpeed(lvl) { return 0.35 + lvl * 0.04; }
-function rowSpawnInterval(lvl) { return Math.max(300, 900 - lvl * 40); }
+function monsterSpeed(lvl) { return 0.5 + lvl * 0.05; }
+function rowSpawnInterval(lvl) { return Math.max(200, 600 - lvl * 30); }
 function monstersPerRow(lvl) { return Math.min(14, 10 + Math.floor(lvl / 3)); }
-function rowFillRate(lvl) { return Math.min(0.95, 0.7 + lvl * 0.02); }
+function rowFillRate(lvl) { return Math.min(0.95, 0.75 + lvl * 0.02); }
 function bossHp(lvl) { return 40 + lvl * 40; }
 function bossSpeed(lvl) { return 0.2 + lvl * 0.02; }
 function bossInterval(lvl) { return Math.max(8000, 25000 - lvl * 1200); }
@@ -225,7 +225,7 @@ function initLevel() {
   targets = [];
   particles = [];
   powerups = [];
-  gate = null;
+  gates = [];
   monsterSpawnTimer = 0;
   bossSpawnTimer = bossInterval(level);
   targetTimerL = 3000;
@@ -313,14 +313,14 @@ function spawnPowerup() {
 }
 
 function spawnGate(bossY) {
-  const y = clamp(bossY, 150, H * 0.55);
-  gate = {
+  const y = clamp(bossY, 100, H * 0.6);
+  gates.push({
     y,
     hp: gateMaxHp(),
     maxHp: gateMaxHp(),
     active: false,
     multiplier: 1.5 + bossesKilledThisLevel * 0.5
-  };
+  });
 }
 
 // === UPDATE ===
@@ -418,14 +418,18 @@ function update(dt) {
     const prevY = m.y;
     m.y += m.speed;
 
-    // Gate collision — trigger once when monster crosses gate line
-    if (gate && gate.hp > 0 && !m.hitGate && prevY < gate.y && m.y >= gate.y) {
-      m.hitGate = true;
-      gate.hp -= m.boss ? 10 : 1;
-      if (gate.hp <= 0) {
-        gate.hp = 0;
-        gate.active = false;
-        spawnParticles(m.x, gate.y, '#00aaaa', 10);
+    // Gate collision — trigger once per gate when monster crosses its line
+    for (const g of gates) {
+      if (g.hp <= 0) continue;
+      const gateKey = 'hitGate_' + g.y;
+      if (!m[gateKey] && prevY < g.y && m.y >= g.y) {
+        m[gateKey] = true;
+        g.hp -= m.boss ? 10 : 1;
+        if (g.hp <= 0) {
+          g.hp = 0;
+          g.active = false;
+          spawnParticles(m.x, g.y, '#00aaaa', 10);
+        }
       }
     }
 
@@ -447,9 +451,14 @@ function update(dt) {
     }
   }
 
-  // Gate activation check — active only when no monsters below it
-  if (gate && gate.hp > 0) {
-    gate.active = !monsters.some(mon => mon.y > gate.y);
+  // Gate activation + self-repair — active when no monsters past it
+  for (const g of gates) {
+    const clear = !monsters.some(mon => mon.y > g.y);
+    g.active = clear && g.hp > 0;
+    if (clear && g.hp < g.maxHp) {
+      g.hp = Math.min(g.maxHp, g.hp + 0.05);
+      if (g.hp > 0) g.active = true;
+    }
   }
 
   // Update powerups
@@ -467,8 +476,8 @@ function update(dt) {
       const m = monsters[mi];
       if (Math.abs(b.x - m.x) < m.w / 2 + 3 && Math.abs(b.y - m.y) < m.h / 2 + 3) {
         let dmg = bulletDamage();
-        if (gate && gate.active && m.y < gate.y) {
-          dmg *= gate.multiplier;
+        for (const g of gates) {
+          if (g.active && m.y < g.y) dmg *= g.multiplier;
         }
         m.hp -= dmg;
         hit = true;
@@ -573,7 +582,9 @@ function pushHordeBack(amount) {
   for (const m of monsters) {
     m.y -= amount;
     if (m.y < -m.h) m.y = -m.h;
-    if (gate && m.y < gate.y) m.hitGate = false;
+    for (const g of gates) {
+      if (m.y < g.y) m['hitGate_' + g.y] = false;
+    }
   }
 }
 
@@ -622,25 +633,25 @@ function renderGame() {
   ctx.fillRect(LANE_L - WALL_W / 2, 0, WALL_W, H);
   ctx.fillRect(LANE_R - WALL_W / 2, 0, WALL_W, H);
 
-  // Gate
-  if (gate) {
-    const gateCol = gate.active ? '#00ffff' : (gate.hp > 0 ? '#446' : '#221');
+  // Gates
+  for (const g of gates) {
+    const gateCol = g.active ? '#00ffff' : (g.hp > 0 ? '#446' : '#221');
     ctx.fillStyle = gateCol;
-    ctx.fillRect(LANE_L, gate.y, LANE_R - LANE_L, 6);
-    if (gate.active) {
-      ctx.fillStyle = 'rgba(0, 255, 255, 0.08)';
-      ctx.fillRect(LANE_L, gate.y + 6, LANE_R - LANE_L, PLAYER_Y - gate.y);
+    ctx.fillRect(LANE_L, g.y, LANE_R - LANE_L, 6);
+    if (g.active) {
+      ctx.fillStyle = 'rgba(0, 255, 255, 0.06)';
+      ctx.fillRect(LANE_L, g.y + 6, LANE_R - LANE_L, PLAYER_Y - g.y);
       ctx.font = '7px "Press Start 2P"';
       ctx.textAlign = 'center';
       ctx.fillStyle = '#0ff';
-      ctx.fillText('x' + gate.multiplier.toFixed(1), LANE_L + 30, gate.y - 4);
+      ctx.fillText('x' + g.multiplier.toFixed(1), LANE_L + 30, g.y - 4);
     }
-    if (gate.hp > 0) {
-      const r = gate.hp / gate.maxHp;
+    if (g.hp > 0) {
+      const r = g.hp / g.maxHp;
       ctx.fillStyle = '#003';
-      ctx.fillRect(LANE_L, gate.y - 3, LANE_R - LANE_L, 2);
-      ctx.fillStyle = gate.active ? '#0ff' : '#446';
-      ctx.fillRect(LANE_L, gate.y - 3, (LANE_R - LANE_L) * r, 2);
+      ctx.fillRect(LANE_L, g.y - 3, LANE_R - LANE_L, 2);
+      ctx.fillStyle = g.active ? '#0ff' : '#446';
+      ctx.fillRect(LANE_L, g.y - 3, (LANE_R - LANE_L) * r, 2);
     }
   }
 
@@ -752,9 +763,16 @@ function getShooterPositions(x, y, count) {
     row++;
     const offset = (row % 2 === 0) ? COL_W / 2 : 0;
     const rowY = y + row * ROW_H;
-    const startX = x - (cols - 1) * COL_W / 2 + offset;
-    for (let c = 0; c < cols && placed < count; c++) {
-      pos.push({ x: startX + c * COL_W, y: rowY });
+    // Fill from center outward: center, left, right, left, right...
+    const centerX = x + offset;
+    const order = [0];
+    for (let s = 1; s <= Math.floor(cols / 2); s++) {
+      order.push(-s);
+      order.push(s);
+    }
+    for (const o of order) {
+      if (placed >= count) break;
+      pos.push({ x: centerX + o * COL_W, y: rowY });
       placed++;
     }
   }
@@ -831,18 +849,18 @@ function renderDiffSelect() {
 // === SHOP ===
 function buildShopItems() {
   shopItems = [
-    { name: 'DAMAGE UP', desc: 'x' + (1 + (upgrades.damage + 1) * 0.5).toFixed(1) + ' DMG', cost: 200 + upgrades.damage * 150, key: 'damage' },
-    { name: 'MAX HP UP', desc: '+25 HP/SHOOTER', cost: 150 + upgrades.hp * 100, key: 'hp' },
-    { name: 'EXTRA STARTER', desc: '+1 START SHOOTER', cost: 400 + upgrades.starters * 300, key: 'starters' },
-    { name: 'GATE ARMOR', desc: '+30 GATE HP', cost: 250 + upgrades.gateDur * 150, key: 'gateDur' },
+    { name: 'DAMAGE UP', desc: 'x' + (1 + (upgrades.damage + 1) * 0.5).toFixed(1) + ' DMG', cost: 3000 + upgrades.damage * 3000, key: 'damage' },
+    { name: 'MAX HP UP', desc: '+25 HP/SHOOTER', cost: 2000 + upgrades.hp * 2000, key: 'hp' },
+    { name: 'EXTRA STARTER', desc: '+1 START SHOOTER', cost: 5000 + upgrades.starters * 5000, key: 'starters' },
+    { name: 'GATE ARMOR', desc: '+30 GATE HP', cost: 2500 + upgrades.gateDur * 2500, key: 'gateDur' },
   ];
   if (!upgrades.powerRapid) {
-    shopItems.push({ name: 'UNLOCK RAPID', desc: 'RAPID FIRE DROPS', cost: 500, key: 'powerRapid' });
+    shopItems.push({ name: 'UNLOCK RAPID', desc: 'RAPID FIRE DROPS', cost: 4000, key: 'powerRapid' });
   }
   if (!upgrades.powerShield) {
-    shopItems.push({ name: 'UNLOCK SHIELD', desc: 'SHIELD DROPS', cost: 500, key: 'powerShield' });
+    shopItems.push({ name: 'UNLOCK SHIELD', desc: 'SHIELD DROPS', cost: 4000, key: 'powerShield' });
   }
-  shopItems.push({ name: 'EXTRA LIFE', desc: '+1 LIFE', cost: 2000, key: 'extraLife' });
+  shopItems.push({ name: 'EXTRA LIFE', desc: '+1 LIFE', cost: 50000 + lives * 25000, key: 'extraLife' });
   shopItems.push({ name: '>>> CONTINUE >>>', desc: '', cost: 0, key: 'continue' });
 }
 
