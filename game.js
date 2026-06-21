@@ -745,17 +745,18 @@ function getShooterPositions(x, y, count) {
   if (count <= 1) return pos;
   const ROW_H = 7;
   const COL_W = 9;
+  const cols = Math.round((W * 0.2) / COL_W);
   let placed = 1;
-  let row = 1;
+  let row = 0;
   while (placed < count) {
-    const cols = row + 1;
+    row++;
+    const offset = (row % 2 === 0) ? COL_W / 2 : 0;
     const rowY = y + row * ROW_H;
-    const startX = x - (cols - 1) * COL_W / 2;
+    const startX = x - (cols - 1) * COL_W / 2 + offset;
     for (let c = 0; c < cols && placed < count; c++) {
       pos.push({ x: startX + c * COL_W, y: rowY });
       placed++;
     }
-    row++;
   }
   return pos;
 }
