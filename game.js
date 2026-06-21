@@ -112,8 +112,8 @@ function distScore(monY) {
 function timeRamp() { return Math.floor(levelTime / 10000) * 0.1; }
 function diffSpeed() { return DIFF_SPEED_MULT[difficulty]; }
 function monsterHp(lvl) { return 1 + Math.floor(lvl * 0.5); }
-function monsterSpeed(lvl) { return (0.5 + lvl * 0.05 + timeRamp()) * diffSpeed(); }
-function curRowSpawnInterval(lvl) { return Math.max(150, (600 - lvl * 30) / (1 + timeRamp())); }
+function monsterSpeed(lvl) { return (0.5 + lvl * 0.05 + timeRamp()) * diffSpeed() * debugTune.speedMult; }
+function curRowSpawnInterval(lvl) { return Math.max(150, (600 - lvl * 30) / (1 + timeRamp())) / debugTune.spawnMult; }
 function monstersPerRow(lvl) { return Math.min(14, 10 + Math.floor(lvl / 3)); }
 function rowFillRate(lvl) { return Math.min(0.95, 0.75 + lvl * 0.02); }
 function bossHp(lvl) { return 40 + lvl * 40; }
@@ -300,8 +300,14 @@ function spawnTarget(type) {
   const x = lane === 'left'
     ? LANE_L / 2
     : LANE_R + (W - LANE_R) / 2;
-  const y = 150 + Math.random() * 350;
-  const hp = type === 'recruit' ? 5 + level : 3 + Math.floor(level / 2);
+  const existing = targets.filter(t => t.type === type).map(t => t.y);
+  let y;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    y = 120 + Math.random() * 400;
+    if (existing.every(ey => Math.abs(ey - y) > 50)) break;
+  }
+  let hp = type === 'recruit' ? 3 + Math.floor(level * 0.5) : 3 + Math.floor(level / 2);
+  if (type === 'recruit') hp = Math.max(1, Math.round(hp * debugTune.recruitHpMult));
   targets.push({ type, x, y, hp, maxHp: hp, lane });
 }
 
@@ -363,7 +369,8 @@ function update(dt) {
   player.x = clamp(player.x + moveDir * PLAYER_SPEED, 10, W - 10);
 
   // Auto-fire from each shooter's position
-  const fireInterval = (rapidFireEnd > elapsed) ? BASE_FIRE_INTERVAL / 2 : BASE_FIRE_INTERVAL;
+  const baseFire = BASE_FIRE_INTERVAL / debugTune.fireMult;
+  const fireInterval = (rapidFireEnd > elapsed) ? baseFire / 2 : baseFire;
   fireTimer -= dt;
   if (fireTimer <= 0) {
     fireTimer = fireInterval;
@@ -398,18 +405,18 @@ function update(dt) {
     spawnBoss();
   }
 
-  // Spawn targets
-  const hasLeftTarget = targets.some(t => t.type === 'recruit');
-  const hasRightTarget = targets.some(t => t.type === 'pushback');
+  // Spawn targets — can stack multiple in each lane
+  const leftCount = targets.filter(t => t.type === 'recruit').length;
+  const rightCount = targets.filter(t => t.type === 'pushback').length;
   targetTimerL -= dt;
   targetTimerR -= dt;
-  if (!hasLeftTarget && targetTimerL <= 0) {
+  if (leftCount < 3 && targetTimerL <= 0) {
     spawnTarget('recruit');
-    targetTimerL = 6000 + Math.random() * 4000;
+    targetTimerL = (3000 + Math.random() * 2000) * debugTune.recruitTimeMult;
   }
-  if (!hasRightTarget && targetTimerR <= 0) {
+  if (rightCount < 3 && targetTimerR <= 0) {
     spawnTarget('pushback');
-    targetTimerR = 5000 + Math.random() * 3000;
+    targetTimerR = 4000 + Math.random() * 2000;
   }
 
   // Spawn powerups
@@ -628,6 +635,7 @@ function render() {
   if (gameState === 'levelclear') renderOverlayText('LEVEL ' + level + ' CLEAR!', '#00ff44', 'PRESS SPACE');
   if (gameState === 'dying') renderOverlayText('LOST A LIFE!', '#ff4444', 'PRESS SPACE TO RETRY');
   if (gameState === 'gameover') renderOverlayText('GAME OVER', '#ff2200', 'SCORE: ' + score + '  PRESS SPACE');
+  renderDebug();
 }
 
 function renderGame() {
@@ -1132,6 +1140,17 @@ document.addEventListener('keydown', e => {
     if (e.code === 'Escape') { closeHelp(); e.preventDefault(); }
     return;
   }
+  if (e.code === 'Backquote') {
+    debugOpen = !debugOpen;
+    return;
+  }
+  if (debugOpen) {
+    if (e.code === 'ArrowUp') debugCursor = Math.max(0, debugCursor - 1);
+    if (e.code === 'ArrowDown') debugCursor = Math.min(debugKeys.length - 1, debugCursor + 1);
+    if (e.code === 'ArrowLeft') debugTune[debugKeys[debugCursor]] = Math.max(0.1, +(debugTune[debugKeys[debugCursor]] - 0.1).toFixed(1));
+    if (e.code === 'ArrowRight') debugTune[debugKeys[debugCursor]] = Math.min(3.0, +(debugTune[debugKeys[debugCursor]] + 0.1).toFixed(1));
+    return;
+  }
   if (e.code === 'KeyB' && gameState === 'playing') {
     useBomb();
     return;
@@ -1280,6 +1299,66 @@ function handleStart() {
   if (gameState === 'nameentry') {
     return;
   }
+}
+
+// === DEBUG PANEL ===
+let debugOpen = false;
+let debugCursor = 0;
+const debugTune = {
+  speedMult: 1.0,
+  spawnMult: 1.0,
+  fireMult: 1.0,
+  recruitTimeMult: 1.0,
+  recruitHpMult: 1.0,
+};
+const debugKeys = Object.keys(debugTune);
+const debugLabels = {
+  speedMult: 'MONSTER SPEED',
+  spawnMult: 'SPAWN RATE',
+  fireMult: 'FIRE RATE',
+  recruitTimeMult: 'RECRUIT TIMER',
+  recruitHpMult: 'RECRUIT HP',
+};
+
+function renderDebug() {
+  if (!debugOpen) return;
+  ctx.fillStyle = 'rgba(0,0,0,0.85)';
+  ctx.fillRect(10, 30, W - 20, debugKeys.length * 28 + 60);
+  ctx.font = '8px "Press Start 2P"';
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ff0';
+  ctx.fillText('DEBUG TUNING (` to close)', 20, 55);
+
+  ctx.fillStyle = '#666';
+  ctx.font = '6px "Press Start 2P"';
+  ctx.fillText('MON:' + monsters.length + ' BUL:' + bullets.length + ' DPS:' + (player.shooters * (1 / (BASE_FIRE_INTERVAL / 1000)) * bulletDamage()).toFixed(1), 20, 70);
+  ctx.fillText('SPD:' + monsterSpeed(level).toFixed(2) + ' INT:' + Math.floor(curRowSpawnInterval(level)) + 'ms', 20, 80);
+
+  for (let i = 0; i < debugKeys.length; i++) {
+    const k = debugKeys[i];
+    const y = 100 + i * 28;
+    const sel = i === debugCursor;
+    ctx.fillStyle = sel ? '#FFD700' : '#888';
+    ctx.font = '7px "Press Start 2P"';
+    ctx.fillText(debugLabels[k], 20, y);
+    ctx.textAlign = 'right';
+    ctx.fillText(debugTune[k].toFixed(2), W - 20, y);
+    ctx.textAlign = 'left';
+    if (sel) {
+      const barX = 20;
+      const barW = W - 40;
+      const barY = y + 6;
+      ctx.fillStyle = '#333';
+      ctx.fillRect(barX, barY, barW, 6);
+      const pct = (debugTune[k] - 0.1) / 2.9;
+      ctx.fillStyle = '#FFD700';
+      ctx.fillRect(barX, barY, barW * pct, 6);
+    }
+  }
+  ctx.font = '6px "Press Start 2P"';
+  ctx.fillStyle = '#555';
+  ctx.textAlign = 'center';
+  ctx.fillText('↑↓ SELECT   ←→ ADJUST (0.1 STEP)', W / 2, 100 + debugKeys.length * 28 + 10);
 }
 
 // === GAME LOOP ===
