@@ -62,6 +62,18 @@ button {
 #lives-block { color: var(--red); }
 #shooters-block { color: var(--green); }
 
+#bomb-btn {
+  background: none;
+  border: 1px solid #884400;
+  color: #ff8800;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+#bomb-btn:hover { border-color: #ffaa00; color: #ffaa00; }
+#bomb-btn:active { background: #331100; }
+
 #mode-btn, #help-btn {
   background: none;
   border: 1px solid var(--dim);

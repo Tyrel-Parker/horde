@@ -16,6 +16,7 @@ const BULLET_SPEED = 7;
 const BASE_FIRE_INTERVAL = 280;
 const DIFF_TIMES = [90, 180, 300];
 const DIFF_NAMES = ['EASY', 'MEDIUM', 'HARD'];
+const DIFF_SPEED_MULT = [1.0, 1.5, 2.0];
 
 // === CANVAS ===
 const canvas = document.getElementById('c');
@@ -36,6 +37,8 @@ window.addEventListener('resize', resizeCanvas);
 const scoreVal = document.getElementById('score-val');
 const livesVal = document.getElementById('lives-val');
 const shootersVal = document.getElementById('shooters-val');
+const bombVal = document.getElementById('bomb-val');
+const bombBtn = document.getElementById('bomb-btn');
 const messageEl = document.getElementById('message');
 function setMessage(msg) { messageEl.textContent = msg; }
 
@@ -76,6 +79,9 @@ let powerupTimer = 0;
 let rapidFireEnd = 0;
 let shieldEnd = 0;
 
+// Bombs
+let bombs = 0;
+
 // Controls
 let keysDown = {};
 let touchActive = false;
@@ -103,13 +109,15 @@ function distScore(monY) {
   return Math.max(1, Math.floor((dist / maxDist) * 10));
 }
 
+function timeRamp() { return Math.floor(levelTime / 10000) * 0.1; }
+function diffSpeed() { return DIFF_SPEED_MULT[difficulty]; }
 function monsterHp(lvl) { return 1 + Math.floor(lvl * 0.5); }
-function monsterSpeed(lvl) { return 0.5 + lvl * 0.05; }
-function rowSpawnInterval(lvl) { return Math.max(200, 600 - lvl * 30); }
+function monsterSpeed(lvl) { return (0.5 + lvl * 0.05 + timeRamp()) * diffSpeed(); }
+function curRowSpawnInterval(lvl) { return Math.max(150, (600 - lvl * 30) / (1 + timeRamp())); }
 function monstersPerRow(lvl) { return Math.min(14, 10 + Math.floor(lvl / 3)); }
 function rowFillRate(lvl) { return Math.min(0.95, 0.75 + lvl * 0.02); }
 function bossHp(lvl) { return 40 + lvl * 40; }
-function bossSpeed(lvl) { return 0.2 + lvl * 0.02; }
+function bossSpeed(lvl) { return (0.2 + lvl * 0.02 + timeRamp() * 0.5) * diffSpeed(); }
 function bossInterval(lvl) { return Math.max(8000, 25000 - lvl * 1200); }
 
 function totalMaxHp() { return 100 + upgrades.hp * 25; }
@@ -242,6 +250,7 @@ function initRun() {
   money = 0;
   lives = 3;
   level = 1;
+  bombs = 0;
   upgrades = { damage: 0, hp: 0, starters: 0, gateDur: 0, powerRapid: false, powerShield: false };
   initLevel();
 }
@@ -378,7 +387,7 @@ function update(dt) {
   // Spawn monster rows
   monsterSpawnTimer -= dt;
   if (monsterSpawnTimer <= 0) {
-    monsterSpawnTimer = rowSpawnInterval(level);
+    monsterSpawnTimer = curRowSpawnInterval(level);
     spawnMonsterRow();
   }
 
@@ -557,6 +566,7 @@ function update(dt) {
   scoreVal.textContent = score;
   livesVal.textContent = lives;
   shootersVal.textContent = player.shooters;
+  bombVal.textContent = bombs;
 }
 
 function takeDamage(amount) {
@@ -576,6 +586,20 @@ function takeDamage(amount) {
       setMessage('YOU FELL! ' + lives + ' LIVES LEFT');
     }
   }
+}
+
+function useBomb() {
+  if (bombs <= 0 || gameState !== 'playing') return;
+  bombs--;
+  for (const m of monsters) {
+    const pts = distScore(m.y) * (m.boss ? 10 : 1);
+    score += pts;
+    money += pts;
+    spawnParticles(m.x, m.y, m.boss ? '#ff00ff' : '#ff8844', m.boss ? 15 : 4);
+  }
+  monsters = [];
+  spawnParticles(W / 2, H / 2, '#ffff00', 40);
+  spawnParticles(W / 2, H / 2, '#ff4400', 40);
 }
 
 function pushHordeBack(amount) {
@@ -861,6 +885,7 @@ function buildShopItems() {
   if (!upgrades.powerShield) {
     shopItems.push({ name: 'UNLOCK SHIELD', desc: 'SHIELD DROPS', cost: 4000, key: 'powerShield' });
   }
+  shopItems.push({ name: 'BOMB', desc: '+1 BOMB (B KEY / 💣 BTN)', cost: 2000 + bombs * 2000, key: 'bomb' });
   shopItems.push({ name: 'EXTRA LIFE', desc: '+1 LIFE', cost: 50000 + lives * 25000, key: 'extraLife' });
   shopItems.push({ name: '>>> CONTINUE >>>', desc: '', cost: 0, key: 'continue' });
 }
@@ -881,6 +906,7 @@ function buyItem(item) {
   else if (item.key === 'gateDur') upgrades.gateDur++;
   else if (item.key === 'powerRapid') upgrades.powerRapid = true;
   else if (item.key === 'powerShield') upgrades.powerShield = true;
+  else if (item.key === 'bomb') bombs++;
   else if (item.key === 'extraLife') lives++;
   buildShopItems();
 }
@@ -1106,6 +1132,10 @@ document.addEventListener('keydown', e => {
     if (e.code === 'Escape') { closeHelp(); e.preventDefault(); }
     return;
   }
+  if (e.code === 'KeyB' && gameState === 'playing') {
+    useBomb();
+    return;
+  }
   if (e.code === 'Space' || e.code === 'Enter') {
     e.preventDefault();
     handleStart();
@@ -1200,6 +1230,7 @@ function closeHelp() {
 helpBtn.addEventListener('click', openHelp);
 document.getElementById('help-close').addEventListener('click', closeHelp);
 helpOverlay.addEventListener('click', e => { if (e.target === helpOverlay) closeHelp(); });
+bombBtn.addEventListener('click', () => useBomb());
 
 // === STATE TRANSITIONS ===
 function handleStart() {
