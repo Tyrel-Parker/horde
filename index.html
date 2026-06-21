@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>HORDE</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="shell">
+  <div id="title">HORDE</div>
+  <div id="hud">
+    <span id="score-block">SCORE: <span id="score-val">0</span></span>
+    <button id="mode-btn">⌨ KEYS</button>
+    <span id="hud-right">
+      <span id="lives-block">♥ <span id="lives-val">3</span></span>
+      <span id="shooters-block">⚔ <span id="shooters-val">1</span></span>
+      <button id="help-btn">
+        <svg width="12" height="16" viewBox="0 0 12 16" aria-hidden="true">
+          <rect x="0" y="0" width="4" height="16" fill="currentColor"/>
+          <rect x="8" y="0" width="4" height="16" fill="currentColor"/>
+        </svg>
+      </button>
+    </span>
+  </div>
+  <canvas id="c"></canvas>
+  <div id="message"></div>
+  <div id="tilt-indicator"></div>
+  <div id="error-log" style="font-family:monospace;font-size:10px;color:#ff4444;background:#1a0000;padding:4px 8px;max-width:560px;width:100%;word-break:break-all;display:none;max-height:80px;overflow-y:auto;"></div>
+  <div id="version-num" style="font-family:'Press Start 2P',monospace;font-size:7px;color:#333;letter-spacing:1px;margin-top:4px;">v1.0</div>
+</div>
+
+<div id="help-overlay">
+  <div id="help-modal">
+    <button id="help-close">✕ CLOSE</button>
+    <div class="help-title">HOW TO PLAY</div>
+
+    <div class="help-heading">CONTROLS</div>
+    <div class="help-row"><span>KEYS MODE</span><span>← → OR A/D TO MOVE</span></div>
+    <div class="help-row"><span>TOUCH MODE</span><span>DRAG LEFT/RIGHT</span></div>
+    <div class="help-row"><span>TILT MODE</span><span>TILT YOUR DEVICE</span></div>
+    <div class="help-mode-hint">USE THE <span id="mode-hint-btn">⌨ KEYS</span> BUTTON TO SWITCH MODES</div>
+
+    <div class="help-heading">OBJECTIVE</div>
+    <div class="help-row"><span>SURVIVE</span><span>THE TIMER EACH LEVEL</span></div>
+    <div class="help-row"><span>CENTER</span><span>SHOOT THE HORDE</span></div>
+    <div class="help-row"><span>LEFT</span><span>RECRUIT SHOOTERS</span></div>
+    <div class="help-row"><span>RIGHT</span><span>PUSH HORDE BACK</span></div>
+
+    <div class="help-heading">SCORING</div>
+    <div class="help-row"><span>DISTANCE</span><span>FARTHER KILLS = MORE $</span></div>
+    <div class="help-row"><span>GATE</span><span>BOSS DROP, MULTIPLIES DMG</span></div>
+    <div class="help-row"><span>SHOP</span><span>BUY UPGRADES BETWEEN LVLS</span></div>
+  </div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>

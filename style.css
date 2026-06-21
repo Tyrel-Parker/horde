@@ -1,0 +1,137 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+:root {
+  --black: #0a0a0f;
+  --red: #FF2200;
+  --yellow: #FFD700;
+  --cyan: #00FFFF;
+  --white: #FFFFFF;
+  --dim: #444466;
+  --green: #44cc44;
+  --orange: #ff8844;
+  --blue: #4488ff;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  background: var(--black);
+  color: var(--white);
+  font-family: 'Press Start 2P', monospace;
+  height: 100%;
+  overflow: hidden;
+  touch-action: none;
+}
+
+button {
+  touch-action: manipulation;
+}
+
+#shell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100vh;
+  gap: 10px;
+  padding: 8px;
+}
+
+#title {
+  font-size: 24px;
+  color: var(--red);
+  text-shadow: 0 0 20px var(--red), 0 0 40px #aa0000;
+  letter-spacing: 8px;
+}
+
+#hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  max-width: 560px;
+  font-size: 10px;
+  padding: 0 4px;
+}
+
+#hud-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+#lives-block { color: var(--red); }
+#shooters-block { color: var(--green); }
+
+#mode-btn, #help-btn {
+  background: none;
+  border: 1px solid var(--dim);
+  color: var(--dim);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+#mode-btn:hover, #help-btn:hover { border-color: var(--white); color: var(--white); }
+#mode-btn.help-highlight { border-color: var(--yellow); color: var(--yellow); animation: pulse 0.5s infinite alternate; }
+#mode-btn.tilt-active { border-color: var(--cyan); color: var(--cyan); }
+
+@keyframes pulse { to { opacity: 0.5; } }
+
+canvas {
+  display: block;
+  image-rendering: pixelated;
+  max-width: 100%;
+  max-height: calc(100vh - 100px);
+}
+
+#message {
+  font-size: 10px;
+  color: var(--yellow);
+  min-height: 16px;
+  text-align: center;
+}
+
+#tilt-indicator {
+  font-size: 7px;
+  color: var(--dim);
+  min-height: 10px;
+}
+
+/* Help overlay */
+#help-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+#help-overlay.open { display: flex; }
+
+#help-modal {
+  background: #111122;
+  border: 2px solid var(--dim);
+  padding: 20px;
+  max-width: 420px;
+  width: 90%;
+  font-family: 'Press Start 2P', monospace;
+}
+
+#help-close {
+  float: right;
+  background: none;
+  border: 1px solid var(--dim);
+  color: var(--white);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.help-title { font-size: 14px; color: var(--red); margin-bottom: 16px; }
+.help-heading { font-size: 9px; color: var(--cyan); margin: 12px 0 6px; border-bottom: 1px solid var(--dim); padding-bottom: 4px; }
+.help-row { display: flex; justify-content: space-between; font-size: 7px; color: var(--white); padding: 3px 0; }
+.help-row span:first-child { color: var(--yellow); }
+.help-mode-hint { font-size: 7px; color: var(--dim); margin-top: 8px; text-align: center; }
+#mode-hint-btn { color: var(--yellow); }
