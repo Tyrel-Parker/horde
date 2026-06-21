@@ -843,7 +843,8 @@ function renderDiffSelect() {
 
   ctx.font = '7px "Press Start 2P"';
   ctx.fillStyle = '#666';
-  ctx.fillText('↑↓ SELECT   SPACE CONFIRM', W / 2, H - 40);
+  ctx.fillText('↑↓ SELECT   SPACE CONFIRM', W / 2, H - 50);
+  ctx.fillText('SWIPE ↑↓   TAP CONFIRM', W / 2, H - 36);
 }
 
 // === SHOP ===
@@ -920,7 +921,8 @@ function renderShop() {
   ctx.font = '7px "Press Start 2P"';
   ctx.textAlign = 'center';
   ctx.fillStyle = '#555';
-  ctx.fillText('↑↓ SELECT   SPACE BUY', W / 2, H - 30);
+  ctx.fillText('↑↓ SELECT   SPACE BUY', W / 2, H - 42);
+  ctx.fillText('SWIPE ↑↓   SWIPE → BUY', W / 2, H - 28);
 }
 
 // === LEADERBOARD ===
@@ -1017,66 +1019,84 @@ const helpBtn = document.getElementById('help-btn');
 const helpOverlay = document.getElementById('help-overlay');
 const helpModeHintBtn = document.getElementById('mode-hint-btn');
 
-// Touch
+// Touch — swipe tracking
+let swipeStart = null;
+
 document.addEventListener('touchstart', e => {
   if (helpOverlay.contains(e.target)) return;
   if (e.target.closest('button')) return;
   e.preventDefault();
   const rect = canvas.getBoundingClientRect();
   const scaleX = W / rect.width;
-  touchActive = true;
-  touchTargetX = (e.touches[0].clientX - rect.left) * scaleX;
+  const scaleY = H / rect.height;
+  swipeStart = {
+    x: e.touches[0].clientX,
+    y: e.touches[0].clientY,
+    cx: (e.touches[0].clientX - rect.left) * scaleX,
+    cy: (e.touches[0].clientY - rect.top) * scaleY
+  };
+  if (gameState === 'playing') {
+    touchActive = true;
+    touchTargetX = swipeStart.cx;
+  }
 }, { passive: false });
 
 document.addEventListener('touchmove', e => {
-  if (!touchActive) return;
+  if (e.target.closest('button')) return;
   e.preventDefault();
-  const rect = canvas.getBoundingClientRect();
-  const scaleX = W / rect.width;
-  touchTargetX = (e.touches[0].clientX - rect.left) * scaleX;
+  if (gameState === 'playing' && touchActive) {
+    const rect = canvas.getBoundingClientRect();
+    touchTargetX = (e.touches[0].clientX - rect.left) * (W / rect.width);
+  }
 }, { passive: false });
 
 document.addEventListener('touchend', e => {
   if (helpOverlay.contains(e.target)) return;
   if (e.target.closest('button')) return;
   e.preventDefault();
-  if (helpOpen) return;
+  if (helpOpen) { touchActive = false; swipeStart = null; return; }
+
+  const SWIPE_THRESH = 30;
+  let dx = 0, dy = 0;
+  if (swipeStart) {
+    dx = e.changedTouches[0].clientX - swipeStart.x;
+    dy = e.changedTouches[0].clientY - swipeStart.y;
+  }
+  const isTap = Math.abs(dx) < SWIPE_THRESH && Math.abs(dy) < SWIPE_THRESH;
+  const isVertical = Math.abs(dy) > Math.abs(dx);
+  const isHorizontal = Math.abs(dx) > Math.abs(dy);
 
   if (gameState === 'nameentry') {
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = W / rect.width;
-    const scaleY = H / rect.height;
-    const tx = (e.changedTouches[0].clientX - rect.left) * scaleX;
-    const ty = (e.changedTouches[0].clientY - rect.left) * scaleY;
-    if (ty < 260) cycleNameChar(-1);
-    else if (ty > 270) cycleNameChar(1);
-    else advanceNameCursor(1);
-    touchActive = false;
-    touchTargetX = null;
-    return;
+    if (isTap) {
+      advanceNameCursor(1);
+    } else if (isVertical) {
+      cycleNameChar(dy > 0 ? 1 : -1);
+    } else if (isHorizontal) {
+      advanceNameCursor(dx > 0 ? 1 : -1);
+    }
+  } else if (gameState === 'diffselect') {
+    if (isTap) {
+      handleStart();
+    } else if (isVertical) {
+      if (dy > 0) diffCursor = Math.min(2, diffCursor + 1);
+      else diffCursor = Math.max(0, diffCursor - 1);
+    }
+  } else if (gameState === 'shop') {
+    if (isHorizontal && dx > SWIPE_THRESH) {
+      handleStart();
+    } else if (isVertical) {
+      if (dy > 0) shopCursor = Math.min(shopItems.length - 1, shopCursor + 1);
+      else shopCursor = Math.max(0, shopCursor - 1);
+    } else if (isTap) {
+      handleStart();
+    }
+  } else if (gameState !== 'playing') {
+    if (isTap) handleStart();
   }
 
-  if (gameState === 'diffselect') {
-    const rect = canvas.getBoundingClientRect();
-    const scaleY = H / rect.height;
-    const ty = (e.changedTouches[0].clientY - rect.top) * scaleY;
-    for (let i = 0; i < 3; i++) {
-      if (Math.abs(ty - (200 + i * 60)) < 25) { diffCursor = i; break; }
-    }
-    handleStart();
-  } else if (gameState === 'shop') {
-    const rect = canvas.getBoundingClientRect();
-    const scaleY = H / rect.height;
-    const ty = (e.changedTouches[0].clientY - rect.top) * scaleY;
-    for (let i = 0; i < shopItems.length; i++) {
-      if (Math.abs(ty - (100 + i * 42)) < 18) { shopCursor = i; break; }
-    }
-    handleStart();
-  } else if (gameState !== 'playing') {
-    handleStart();
-  }
   touchActive = false;
   touchTargetX = null;
+  swipeStart = null;
 }, { passive: false });
 
 // Keys
@@ -1130,12 +1150,14 @@ async function requestTiltPermission() {
 }
 
 function handleOrientation(e) {
-  if (controlMode !== 'tilt') return;
   tiltEventReceived = true;
   tiltGamma = e.gamma ?? 0;
-  tiltIndicator.textContent = `g${tiltGamma.toFixed(0)}`;
+  if (controlMode === 'tilt') {
+    tiltIndicator.textContent = `g${tiltGamma.toFixed(0)}`;
+  }
 }
-window.addEventListener('deviceorientation', handleOrientation);
+window.addEventListener('deviceorientation', handleOrientation, true);
+window.addEventListener('deviceorientationabsolute', handleOrientation, true);
 
 // Mode button
 const MODES = ['keys', 'swipe', 'tilt'];
