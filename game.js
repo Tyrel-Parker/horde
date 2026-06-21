@@ -16,7 +16,7 @@ const BULLET_SPEED = 7;
 const BASE_FIRE_INTERVAL = 280;
 const DIFF_TIMES = [90, 180, 300];
 const DIFF_NAMES = ['EASY', 'MEDIUM', 'HARD'];
-const DIFF_SPEED_MULT = [0.8, 1.0, 1.5];
+const DIFF_SPEED_MULT = [0.8, 1.0, 1.2];
 
 // === CANVAS ===
 const canvas = document.getElementById('c');
