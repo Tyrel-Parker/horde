@@ -363,7 +363,7 @@ function update(dt) {
   }
 
   if (controlMode === 'tilt' && tiltGamma !== null) {
-    if (Math.abs(tiltGamma) > 8) moveDir = Math.sign(tiltGamma);
+    if (Math.abs(tiltGamma) > 5) moveDir = Math.sign(tiltGamma);
   }
 
   player.x = clamp(player.x + moveDir * PLAYER_SPEED, 10, W - 10);
@@ -1187,6 +1187,7 @@ document.addEventListener('keyup', e => {
 // Tilt
 let tiltPermissionGranted = false;
 let tiltEventReceived = false, tiltCheckTimer = null;
+let tiltHasStandard = false;
 const tiltIndicator = document.getElementById('tilt-indicator');
 
 async function requestTiltPermission() {
@@ -1199,14 +1200,24 @@ async function requestTiltPermission() {
 }
 
 function handleOrientation(e) {
+  if (e.gamma == null) return;
   tiltEventReceived = true;
-  tiltGamma = e.gamma ?? 0;
+  tiltGamma = e.gamma;
   if (controlMode === 'tilt') {
     tiltIndicator.textContent = `g${tiltGamma.toFixed(0)}`;
   }
 }
-window.addEventListener('deviceorientation', handleOrientation, true);
-window.addEventListener('deviceorientationabsolute', handleOrientation, true);
+
+function handleOrientationAbsolute(e) {
+  if (tiltHasStandard) return;
+  handleOrientation(e);
+}
+
+window.addEventListener('deviceorientation', (e) => {
+  if (e.gamma != null) tiltHasStandard = true;
+  handleOrientation(e);
+}, true);
+window.addEventListener('deviceorientationabsolute', handleOrientationAbsolute, true);
 
 // Mode button
 const MODES = ['keys', 'swipe', 'tilt'];
@@ -1215,7 +1226,7 @@ modeBtn.textContent = MODE_LABELS[controlMode];
 
 modeBtn.addEventListener('click', async () => {
   const next = MODES[(MODES.indexOf(controlMode) + 1) % MODES.length];
-  if (next === 'tilt' && !tiltPermissionGranted) {
+  if (next === 'tilt') {
     tiltPermissionGranted = await requestTiltPermission();
     if (!tiltPermissionGranted) { setMessage('TILT NOT AVAILABLE'); return; }
   }
@@ -1228,7 +1239,7 @@ modeBtn.addEventListener('click', async () => {
     tiltEventReceived = false;
     tiltCheckTimer = setTimeout(() => {
       if (controlMode === 'tilt' && !tiltEventReceived)
-        tiltIndicator.textContent = 'TILT BLOCKED';
+        tiltIndicator.textContent = 'NO TILT DATA';
     }, 2000);
   }
 });
